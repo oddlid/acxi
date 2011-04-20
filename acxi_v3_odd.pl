@@ -5,26 +5,80 @@
 #
 # Odd Eivind Ebbesen <oddebb@gmail.com>, 2011-04-07 02:20:24
 
+## POD documentation (a lot more flexible than inline help functions)
+
+=pod
+
+=head1 NAME
+
+    acxi - wrapper script for converting various audio formats to ogg or mp3.
+
+=head1 SYNOPSIS
+
+B<acxi> [options]
+
+=over
+
+=item -c, --copy=LIST
+
+List of alternate data types to copy to output type directories. Must be comma separated, no spaces, see sample.
+
+=item -d, --destination=PATH
+
+The path to the directory where you want the processed (eg, ogg) files to go.
+
+=item -f, --force
+
+=item -i, --input=FORMAT
+
+Input type/format. Supported values are: flac, wav, raw,
+
+=item -o, --output=FORMAT
+
+Output type/format. Supported values are: ogg, mp3.
+
+=item -q, --quality=VALUE
+
+Encoding quality. For ogg, accepted values are 1-10, where 10 is the best quality, and the bigggest file size. For mp3, accepted values are 0-9 (VBR), where 0 is the best quality, and the biggest file size.
+
+=item -q, --quiet
+
+=item -s, --source=PATH
+
+The source/root directory for your input files (flac/wav/raw).
+
+=item -?, -h, --help
+
+This help text.
+
+=item --version
+
+Print acxi version number, and some more details.
+
+
+=cut
+
+## Start code
 use strict;
 use warnings;
-use Getopt::Long;
+use Getopt::Long qw(:config auto_version auto_help no_ignore_case);
 
 
 ## Internal settings:
+
+# Getopt::Long will automatically control --version if this variable is set:
+$main::VERSION = "3.0.0";
+
+# Not used yet, but as a future thought...
 my %ACXI = (
-    version     => '3.0.0', 
-    date        => '2011-04-07',
-    desc        => '', 
+    version     => $main::VERSION, 
+    date        => '2011-04-15',
+    desc        => 'Audio file conversion script', 
     authors     => 'Harald Hope, Odd Eivind Ebbesen', 
-    credits     => '', 
-    url         => ''
+    credits     => 'Jason L. Buberel <jason@buberel.org>, Evan Boggs <etboggs@indiana.edu>', 
+    url         => 'http://techpatterns.com/forums/about1491.html'
 );
-my %CMD = (
-    ogg         => '', 
-    flac        => '', 
-    metaflac    => '', 
-    lame        => ''
-);
+# Internal log/message levels (use corresponding values, not variables in config files)
 my %LOG = (
     quiet       => 0, 
     info        => 1, 
@@ -38,47 +92,90 @@ my %LINE = (
     heavy => '===========================================================================\n'
 );
 
+my @CONFIGS = (
+    "/etc/acxi.conf", 
+    "$ENV{HOME}/.acxi.conf"
+);
 
+my @OUTPUT_TYPES = ("ogg", "mp3");
+
+my %ARG_ENCODER_VERBOSITY = (
+    mp3 => %{$LOG{QUIET} => "--quiet";
+);
 ## User settings:
-my $DIR_SRC    = "$ENV{'HOME'}/flac";
-my $DIR_DST    = "$ENV{'HOME'}/ogg";
-my $LOG_LEVEL  = $LOG{debug};
+# In the config file, you just write KEY = value, eg:
+# DIR_PREFIX_SOURCE = /home/user/flac 
+# Settings not present in the config file will stay as defined here.
+my %USER_SETTINGS = (
+    LOG_LEVEL           => $LOG{info}, 
+    DIR_PREFIX_SOURCE   => "$ENV{HOME}/flac", 
+    DIR_PREFIX_DEST     => "$ENV{HOME}/ogg", 
+    QUALITY             => 7, 
+    INPUT_TYPE          => "flac", 
+    OUTPUT_TYPE         => "ogg", 
+    COPY_TYPES          => "bmp,jpg,jpeg,tif,doc,docx,odt,pdf,txt", 
+    COMMAND_OGG         => "/usr/bin/oggenc", 
+    COMMAND_LAME        => "/usr/bin/lame", 
+    COMMAND_FLAC        => "/usr/bin/flac", 
+    COMMAND_METAFLAC    => "/usr/bin/metaflac"
+);
 ## END user settings
 
-use vars qw(%ACXI %CMD);
+# This can be used to export enclosed vars if this script were to be used as a module
+#use vars qw(%ACXI);
 
 ## Functions:
 
 sub acxi_log {
     my ($msg, $lvl) = @_;
     if (!defined($lvl)) {
-        $lvl = $LOG_LEVEL;
+        $lvl = $USER_SETTINGS{LOG_LEVEL};
     }
-    if ($LOG_LEVEL == $LOG{quiet}) {
+    if ($USER_SETTINGS{LOG_LEVEL} == $LOG{quiet}) {
         return;
     }
-    if ($lvl <= $LOG_LEVEL) {
+    if ($lvl <= $USER_SETTINGS{LOG_LEVEL}) {
         print($msg);
     }
 }
 
-sub helpmsg {
-    print <<EOM;
-This is not helpful...
-    ...but it will soon be!
-
-EOM
+sub read_config_file {
+    my ($file, $var, $val);
+    foreach $file (@_) {
+        next unless open (CONFIG, "$file");
+        while (<CONFIG>) {
+            chomp;
+            s/#.*//;
+            s/^\s+//;
+            s/\s+$//;
+            next unless length;
+            ($var, $val) = split(/\s*=\s*/, $_, 2);
+            $USER_SETTINGS{$var} = $val;
+        }
+    }
 }
 
-sub app_version {
+sub set_arg_audio {
+    my ($llvl, $itype, $otype) = @_;
+    if ($llvl eq $LOG{quiet}) {
+        $ARG_ENCODER{$otype} = "--silent";
+    }
 }
-
-sub read_settings {
-}
-
-
 
 ## Entry point:
 
-acxi_log("Still working on it....\n", $LOG{debug});
-acxi_log("Seems it's working ok now.\n");
+# This so far only serves the purpose of loading Getopt::Long, so that the automatic
+# --version and -?|-h|--help works with the POD docs.
+my $dummy;
+GetOptions(
+    "d|dummy:s" => \$dummy
+);
+
+read_config_file(@CONFIGS);
+while (my ($k, $v) = each %USER_SETTINGS) {
+    print("$k => $v\n");
+}
+
+acxi_log("Ladidadida, logging at user or predefined level ($USER_SETTINGS{LOG_LEVEL})\n");
+acxi_log("Logging at DEBUG, which should not be seen if level < 3\n", $LOG{debug});
+
