@@ -76,7 +76,7 @@ my %ACXI = (
     version     => $main::VERSION, 
     date        => q(2011-04-15),
     desc        => q(Audio file conversion script), 
-    authors     => q(Harald Hope, Odd Eivind Ebbesen), 
+    authors     => q(Harald Hope, Odd Eivind Ebbesen <odd@oddware.net>), 
     credits     => q(Jason L. Buberel <jason@buberel.org>, Evan Boggs <etboggs@indiana.edu>), 
     url         => q(http://techpatterns.com/forums/about1491.html)
 );
@@ -132,11 +132,11 @@ sub acxi_log {
     # The result of calling this function without a level param, is that
     # the message is shown at which ever level is set, except "quiet",
     my ($msg, $lvl) = @_;
-    if (!defined($lvl)) {
-        $lvl = $USER_SETTINGS{LOG_LEVEL};
-    }
     if ($USER_SETTINGS{LOG_LEVEL} == $LOG{quiet}) {
         return;
+    }
+    if (!defined($lvl)) {
+        $lvl = $USER_SETTINGS{LOG_LEVEL};
     }
     if ($lvl <= $USER_SETTINGS{LOG_LEVEL}) {
         print($msg);
@@ -159,6 +159,14 @@ sub read_config_file {
             $USER_SETTINGS{$var} = $val;
         }
     }
+    # If $USER_TYPES is set (from old config file), set $USER_SETTINGS{COPY_TYPES}
+    # to that value. If COPY_TYPES is set in the config file instead, it will have 
+    # been set in USER_SETTINGS already, from the read loop above.
+    # Splitting COPY_TYPES to an array will be done later, as needed.
+    if (defined($USER_SETTINGS{USER_TYPES})) {
+        $USER_SETTINGS{COPY_TYPES} = $USER_SETTINGS{USER_TYPES};
+        delete($USER_SETTINGS{USER_TYPES}); # don't need two copies of this setting
+    }
 }
 
 # Create destination directories as in source
@@ -179,7 +187,7 @@ sub dircopy_helper {
         $newdir =~ s/$srcx/$dstx/;
         acxi_log($LINE{small}, $LOG{verbose});
         acxi_log(qq(Creating new directory:\n\t$newdir\n), $LOG{verbose});
-        mkdir(qq($newdir)) or warn(qq(Failed to create directory: "$newdir" -  $!));
+        mkdir(qq($newdir)) or acxi_log(qq(Failed to create directory: "$newdir" -  $!\n), $LOG{debug});
     }
 }
 
