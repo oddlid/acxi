@@ -3,60 +3,10 @@
 # Trying to do a rewrite of acxi, mostly just to get totally into it
 # myself, to be able to understand it better and help more constructively.
 #
+# All documentation for this program is embedded in the end of this file, 
+# in POD format for easier formatting of output.
+#
 # Odd Eivind Ebbesen <oddebb@gmail.com>, 2011-04-07 02:20:24
-
-## POD documentation (a lot more flexible than inline help functions)
-
-=pod
-
-=head1 NAME
-
-    acxi - wrapper script for converting various audio formats to ogg or mp3.
-
-=head1 SYNOPSIS
-
-B<acxi> [options]
-
-=over
-
-=item -c, --copy=LIST
-
-List of alternate data types to copy to output type directories. Must be comma separated, no spaces, see sample.
-
-=item -d, --destination=PATH
-
-The path to the directory where you want the processed (eg, ogg) files to go.
-
-=item -f, --force
-
-=item -i, --input=FORMAT
-
-Input type/format. Supported values are: flac, wav, raw,
-
-=item -o, --output=FORMAT
-
-Output type/format. Supported values are: ogg, mp3.
-
-=item -q, --quality=VALUE
-
-Encoding quality. For ogg, accepted values are 1-10, where 10 is the best quality, and the bigggest file size. For mp3, accepted values are 0-9 (VBR), where 0 is the best quality, and the biggest file size.
-
-=item -q, --quiet
-
-=item -s, --source=PATH
-
-The source/root directory for your input files (flac/wav/raw).
-
-=item -?, -h, --help
-
-This help text.
-
-=item --version
-
-Print acxi version number, and some more details.
-
-
-=cut
 
 ## Start code
 use strict;
@@ -65,7 +15,6 @@ use Getopt::Long qw(:config auto_version auto_help no_ignore_case);
 use Pod::Usage;
 use File::Find;
 use Cwd;
-
 
 ## Internal settings:
 
@@ -237,11 +186,11 @@ GetOptions(
     "q|quality:s" => "", 
     "s|source:s" => "",
     "V|version" => sub { Getopt::Long::VersionMessage($EX_{OK}) },
-    "v|verbose+" => \$USER_SETTINGS{LOG_LEVEL}, 
+    "v|verbose+" => \$USER_SETTINGS{LOG_LEVEL}, # increases existing level by 1 for each '-v' given
     "Q|quiet|silent" => sub { $USER_SETTINGS{LOG_LEVEL} = $LOG{quiet} }, 
     "h|help|?" => \$help, 
     man => \$man
-) or pod2usage($EX_{DATAERR});
+) or pod2usage(-exitstatus => $EX_{DATAERR}, -verbose => $LOG{info});
 pod2usage($EX_{OK}) if $help;
 pod2usage(-exitstatus => $EX_{OK}, -verbose => $LOG{verbose}) if $man;
 
@@ -254,3 +203,127 @@ acxi_log(qq(Ladidadida, logging at user or predefined level ($USER_SETTINGS{LOG_
 acxi_log(qq(Logging at DEBUG, which should not be seen if level < 3\n), $LOG{debug});
 
 #dircopy();
+
+
+__END__
+
+## POD documentation (a lot more flexible than inline help functions)
+
+=pod
+
+=encoding utf8
+
+=head1 NAME
+
+acxi - wrapper script for converting various audio formats to ogg or mp3.
+
+=head1 VERSION
+
+=for comment Remember to change the version number here to the same as $main::VERSION
+
+3.0.0  @2011-05-11
+
+=head1 DESCRIPTION
+
+acxi simplifies converting whole directories of one audio format to another. The audio conversion itself is done through native tools (flac, metaflac, oggenc, lame), but eases the job of copying extra files (like coverart, lyrics, etc.) and recreating directory structures recursively.
+
+=head1 SYNOPSIS
+
+B<acxi> [options]
+
+=head1 OPTIONS
+
+=over
+
+=item B<-c, --copy>=LIST
+
+List of alternate data types to copy to output type directories. Must be comma separated, no spaces, see sample.
+
+=item B<-d, --destination>=PATH
+
+The path to the directory where you want the processed (eg, ogg) files to go.
+
+=item B<-f, --force>
+
+Overwrite destination files without confirmation even if they already exist.
+
+=item B<-i, --input>=FORMAT
+
+Input type/format. Supported values are: flac, wav, raw,
+
+=item B<-o, --output>=FORMAT
+
+Output type/format. Supported values are: ogg, mp3.
+
+=item B<-q, --quality>=VALUE
+
+Encoding quality. For ogg, accepted values are 1-10, where 10 is the best quality, and the bigggest file size. For mp3, accepted values are 0-9 (VBR), where 0 is the best quality, and the biggest file size.
+
+=item B<-Q, --quiet, --silent>
+
+Supresses all output by setting the user setting LOG_LEVEL to 0 (quiet).
+
+=item B<-v, --verbose>
+
+Increases user setting LOG_LEVEL by one for each invocation given on the command line. If LOG_LEVEL is already set to 3 (debug), then this option has no effect.
+Recognized values are: 
+
+=item B<-s, --source>=PATH
+
+The source/root directory for your input files (flac/wav/raw).
+
+=item B<-?, -h, --help>
+
+This help text.
+
+=item B<-m, --man>
+
+Shows the full documentation for acxi in automatically generated man page format.
+
+=item B<-V, --version>
+
+Print acxi version number and Perl + Getopt version numbers.
+
+=back
+
+=head1 EXAMPLES
+
+Copy *.png and *.jpg files found in the source directories, set top level source directory to /path/to/flac/, set top level destination directory to /path/to/ogg/, force overwrite if destination files already exist, set quality for en encoder to 6 and increase the preset verbosity levels by 2.
+    acxi --copy png,jpg --source /path/to/flac/ --destination /path/to/ogg/ -f -q 6 -v -v 
+
+=head1 CONFIGURATION
+
+/etc/acxi.conf (systemwide), ~/.acxi.conf (user)
+
+The systemwide config is read first if found, then the user config if found, and then command line parameters if set.
+
+The configuration file format is OPTION=value on one line each. Recognized options are:
+    LOG_LEVEL=<0-3>
+    DIR_PREFIX_SOURCE=/path/to/dir
+    DIR_PREFIX_DEST=/path/to/dir
+    QUALITY=...
+    INPUT_TYPE=<flac|ogg|mp3>
+    OUTPUT_TYPE=<flac|ogg|mp3>
+    COPY_TYPES=file-extension,file-extension,... (without '.')
+    COMMAND_OGG=/path/to/ogg
+    COMMAND_FLAC=/path/to/flac
+    COMMAND_METAFLAC=/path/to/metaflac
+    COMMAND_LAME=/path/to/lame
+
+
+=head1 AUTHORS
+
+=over
+
+=item *
+
+Harald Hope <http://smxi.org>
+
+=item *
+
+Odd Eivind Ebbesen <odd@oddware.net>
+
+=back
+
+=cut
+
