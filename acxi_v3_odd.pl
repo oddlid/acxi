@@ -147,6 +147,10 @@ sub read_config_file {
     }
 }
 
+sub dump_config {
+    # Dump config for the user to easily see the settings in effect
+}
+
 # Create destination directories as in source
 sub dircopy {
     acxi_log($LINE{large}, $LOG{verbose});
