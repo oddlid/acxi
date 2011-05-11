@@ -6,6 +6,9 @@
 # All documentation for this program is embedded in the end of this file, 
 # in POD format for easier formatting of output.
 #
+# The latest version can be obtained via git, like this:
+#   git clone git://gbg.oddware.net/acxi.git
+#
 # Odd Eivind Ebbesen <oddebb@gmail.com>, 2011-04-07 02:20:24
 
 ## Start code
