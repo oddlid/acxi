@@ -62,6 +62,7 @@ Print acxi version number, and some more details.
 use strict;
 use warnings;
 use Getopt::Long qw(:config auto_version auto_help no_ignore_case);
+use Pod::Usage;
 use File::Find;
 use Cwd;
 
@@ -70,6 +71,31 @@ use Cwd;
 
 # Getopt::Long will automatically control --version if this variable is set:
 $main::VERSION = "3.0.0";
+
+my $help = 0;   # for Pod::Usage brief help msg
+my $man = 0;    # for Pod::Usage full documentation
+
+# Exit codes, copied from Linux sysexits.h, to follow standards.
+my %EX_ = (
+    OK          => 0,   # successful termination 
+    _BASE       => 64,  # base value for error messages 
+    USAGE       => 64,  # command line usage error 
+    DATAERR     => 65,  # data format error 
+    NOINPUT     => 66,  # cannot open input 
+    NOUSER      => 67,  # addressee unknown 
+    NOHOST      => 68,  # host name unknown 
+    UNAVAILABLE => 69,  # service unavailable 
+    SOFTWARE    => 70,  # internal software error 
+    OSERR       => 71,  # system error (e.g., can't fork) 
+    OSFILE      => 72,  # critical OS file missing 
+    CANTCREAT   => 73,  # can't create (user) output file 
+    IOERR       => 74,  # input/output error 
+    TEMPFAIL    => 75,  # temp failure; user is invited to retry 
+    PROTOCOL    => 76,  # remote error in protocol 
+    NOPERM      => 77,  # permission denied 
+    CONFIG      => 78,  # configuration error 
+    _MAX        => 78   # maximum listed value 
+);
 
 # Not used yet, but as a future thought...
 my %ACXI = (
@@ -200,14 +226,26 @@ sub dircopy_helper {
 
 ## Entry point:
 
-# This so far only serves the purpose of loading Getopt::Long, so that the automatic
-# --version and -?|-h|--help works with the POD docs.
-my $dummy;
-GetOptions(
-    "d|dummy:s" => \$dummy
-);
-
+# read config file first, and _then_ set CLI options to override
 read_config_file(@CONFIGS);
+GetOptions(
+    "c|copy:s" => \$USER_SETTINGS{COPY_TYPES}, 
+    "d|destination:s" => \$USER_SETTINGS{DIR_PREFIX_DEST}, 
+    "f|force" => "",
+    "i|input:s" => "", 
+    "o|output:s" => "", 
+    "q|quality:s" => "", 
+    "s|source:s" => "",
+    "V|version" => sub { Getopt::Long::VersionMessage($EX_{OK}) },
+    "v|verbose+" => \$USER_SETTINGS{LOG_LEVEL}, 
+    "Q|quiet|silent" => sub { $USER_SETTINGS{LOG_LEVEL} = $LOG{quiet} }, 
+    "h|help|?" => \$help, 
+    man => \$man
+) or pod2usage($EX_{DATAERR});
+pod2usage($EX_{OK}) if $help;
+pod2usage(-exitstatus => $EX_{OK}, -verbose => $LOG{verbose}) if $man;
+
+# debug..
 while (my ($k, $v) = each %USER_SETTINGS) {
     acxi_log(qq($k => $v\n), $LOG{debug});
 }
@@ -215,4 +253,4 @@ while (my ($k, $v) = each %USER_SETTINGS) {
 acxi_log(qq(Ladidadida, logging at user or predefined level ($USER_SETTINGS{LOG_LEVEL})\n));
 acxi_log(qq(Logging at DEBUG, which should not be seen if level < 3\n), $LOG{debug});
 
-dircopy();
+#dircopy();
