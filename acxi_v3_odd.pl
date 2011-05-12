@@ -18,6 +18,7 @@ use Getopt::Long qw(:config auto_version auto_help no_ignore_case);
 use Pod::Usage;
 use File::Find;
 use Cwd;
+use Data::Dumper;
 
 ## Internal settings:
 
@@ -149,6 +150,26 @@ sub read_config_file {
 
 sub dump_config {
     # Dump config for the user to easily see the settings in effect
+    # Let caller decide which log level to be used by taking level as a param
+    my $lvl = shift;
+    my ($maxlen, $curlen) = 0;
+    my $strbuf = "";
+    #read_config_file();    # should already have been done as first step in program entry point
+
+    # First, loop through hash and find the longest key, 
+    # then loop once more, and print contents aligned
+    my @keys = sort(keys(%USER_SETTINGS));
+    foreach (@keys) {
+        $curlen = length($_);
+        $maxlen = $curlen if ($curlen > $maxlen);
+    }
+    acxi_log($LINE{heavy}, $lvl);
+    acxi_log(qq(==== Current configuration: ====\n), $lvl);
+    foreach my $key (@keys) {
+        $strbuf = sprintf("%-${maxlen}s", $key);
+        acxi_log(qq($strbuf = $USER_SETTINGS{$key}\n), $lvl);
+    }
+    #acxi_log($LINE{large}, $lvl);
 }
 
 # Create destination directories as in source
@@ -202,12 +223,10 @@ pod2usage($EX_{OK}) if $help;
 pod2usage(-exitstatus => $EX_{OK}, -verbose => $LOG{verbose}) if $man;
 
 # debug..
-while (my ($k, $v) = each %USER_SETTINGS) {
-    acxi_log(qq($k => $v\n), $LOG{debug});
-}
+dump_config();
 
-acxi_log(qq(Ladidadida, logging at user or predefined level ($USER_SETTINGS{LOG_LEVEL})\n));
-acxi_log(qq(Logging at DEBUG, which should not be seen if level < 3\n), $LOG{debug});
+#acxi_log(qq(Ladidadida, logging at user or predefined level ($USER_SETTINGS{LOG_LEVEL})\n));
+#acxi_log(qq(Logging at DEBUG, which should not be seen if level < 3\n), $LOG{debug});
 
 #dircopy();
 
