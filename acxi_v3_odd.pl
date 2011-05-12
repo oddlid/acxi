@@ -17,8 +17,9 @@ use warnings;
 use Getopt::Long qw(:config auto_version auto_help no_ignore_case);
 use Pod::Usage;
 use File::Find;
+use File::Basename;
+use File::Spec;
 use Cwd;
-use Data::Dumper;
 
 ## Internal settings:
 
@@ -94,10 +95,10 @@ my %USER_SETTINGS = (
     INPUT_TYPE          => "flac", 
     OUTPUT_TYPE         => "ogg", 
     COPY_TYPES          => "bmp,jpg,jpeg,tif,doc,docx,odt,pdf,txt", 
-    COMMAND_OGG         => "/usr/bin/oggenc", 
-    COMMAND_LAME        => "/usr/bin/lame", 
-    COMMAND_FLAC        => "/usr/bin/flac", 
-    COMMAND_METAFLAC    => "/usr/bin/metaflac"
+    COMMAND_OGG         => "/path/to/oggenc", 
+    COMMAND_LAME        => "/path/to/lame", 
+    COMMAND_FLAC        => "/path/to/flac", 
+    COMMAND_METAFLAC    => "/path/to/metaflac"
 );
 ## END user settings
 
@@ -229,6 +230,42 @@ sub dircopy_helper {
     }
 }
 
+sub verify_ext_binaries {
+    # Check if the set paths to external commands point to valid executables.
+    # If not, try to locate them, and if not found, unset the paths.
+    # Use references for less typing, and to be able to change vars directly
+    # when passed to other functions.
+    my $flac = \$USER_SETTINGS{COMMAND_FLAC};
+    my $mflac = \$USER_SETTINGS{COMMAND_METAFLAC};
+    my $lame = \$USER_SETTINGS{COMMAND_LAME};
+    my $ogg = \$USER_SETTINGS{COMMAND_OGG};
+
+    is_executable($$flac) or locate_binary($$flac, $flac);
+    is_executable($$mflac) or locate_binary($$mflac, $mflac);
+    is_executable($$lame) or locate_binary($$lame, $lame);
+    is_executable($$ogg) or locate_binary($$ogg, $ogg);
+}
+
+sub is_executable {
+    # Test if a file exists and can be executed by the real UID
+    my $file = shift;
+    return (-X $file);
+}
+
+sub locate_binary {
+    # Try to locate file in $ENV{PATH}
+    my ($filename, $slot) = @_;
+    my $fullpath = "";
+    $filename = fileparse($filename);
+    foreach my $path (split/:/,$ENV{PATH}) {
+        $fullpath = File::Spec->catfile($path, $filename);
+        if (is_executable($fullpath)) {
+            $$slot = $fullpath; # important to dereference $slot here
+            return;
+        }
+    }
+}
+
 #sub set_arg_audio {
 #    my ($llvl, $itype, $otype) = @_;
 #    if ($llvl eq $LOG{quiet}) {
@@ -260,7 +297,9 @@ pod2usage($EX_{OK}) if $help;
 pod2usage(-exitstatus => $EX_{OK}, -verbose => $LOG{verbose}) if $man;
 
 # debug..
-#...
+dump_config();
+verify_ext_binaries();
+dump_config();
 
 
 
