@@ -180,11 +180,14 @@ sub read_config_file {
 
 sub dump_config {
     # Dump config for the user to easily see the settings in effect
-    # Let caller decide which log level to be used by taking level as a param
-    my $lvl = shift;
-    my ($maxlen, $curlen) = 0;
+    my ($maxlen, $curlen, $lvl_forced) = 0;
     my $strbuf = "";
-    #read_config_file();    # should already have been done as first step in program entry point
+    my $lvl = \$USER_SETTINGS{LOG_LEVEL};
+    if ($$lvl < 1) {
+        $$lvl = 1;
+        $lvl_forced = 1;
+    }
+    #acxi_log("Level: $$lvl\n");
 
     # First, loop through hash and find the longest key, 
     # then loop once more, and print contents aligned
@@ -193,13 +196,16 @@ sub dump_config {
         $curlen = length($_);
         $maxlen = $curlen if ($curlen > $maxlen);
     }
-    acxi_log(line("=", $LINE_LEN{long}, 1), $lvl);
-    acxi_log(header("=", qq(Current configuration:), $LINE_LEN{long}, 1), $lvl);
+    acxi_log(line("=", $LINE_LEN{long}, 1), $$lvl);
+    acxi_log(header("=", qq(Current configuration:), $LINE_LEN{long}, 1), $$lvl);
     foreach my $key (@keys) {
         $strbuf = sprintf("%-${maxlen}s", $key);
-        acxi_log(qq($strbuf = $USER_SETTINGS{$key}\n), $lvl);
+        acxi_log(qq($strbuf = $USER_SETTINGS{$key}\n), $$lvl);
     }
-    acxi_log(line("=", $LINE_LEN{long}, 1), $lvl);
+    if ($lvl_forced) {
+        acxi_log(qq/* Note: LOG_LEVEL was forced to 1 (info), as the user setting was 0 (quiet)\n/, $$lvl);
+    }
+    acxi_log(line("=", $LINE_LEN{long}, 1), $$lvl);
 }
 
 # Create destination directories as in source
@@ -247,6 +253,7 @@ GetOptions(
     "v|verbose+" => \$USER_SETTINGS{LOG_LEVEL}, # increases existing level by 1 for each '-v' given
     "Q|quiet|silent" => sub { $USER_SETTINGS{LOG_LEVEL} = $LOG{quiet} }, 
     "l|level=i" => \$USER_SETTINGS{LOG_LEVEL}, 
+    "dump" => sub { dump_config(); exit $EX_{OK}; },
     "h|help|?" => \$help, 
     man => \$man
 ) or pod2usage(-exitstatus => $EX_{DATAERR}, -verbose => $LOG{info});
@@ -259,7 +266,7 @@ pod2usage(-exitstatus => $EX_{OK}, -verbose => $LOG{verbose}) if $man;
 #acxi_log(qq(Ladidadida, logging at user or predefined level ($USER_SETTINGS{LOG_LEVEL})\n));
 #acxi_log(qq(Logging at DEBUG, which should not be seen if level < 3\n), $LOG{debug});
 
-dircopy();
+#dircopy();
 
 
 __END__
