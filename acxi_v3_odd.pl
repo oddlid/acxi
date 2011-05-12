@@ -67,10 +67,9 @@ my %LOG = (
     debug       => 3
 );
 
-my %LINE = (
-    small => qq(-----------------------------------------------------------------\n), 
-    large => qq(---------------------------------------------------------------------------\n), 
-    heavy => qq(===========================================================================\n)
+my %LINE_LEN = (
+    short => 65, 
+    long  => 75
 );
 
 my @CONFIGS = (
@@ -122,6 +121,37 @@ sub acxi_log {
     }
 }
 
+sub line {
+    # A replacement for predefining vars with different lines.
+    # Just generate them on the fly.
+    my ($char, $length, $newline) = @_;
+    my $buf = ($char x $length);
+    $buf .= "\n" if ($newline);
+    return $buf;
+}
+
+sub header {
+    # Returns a string padded right and left with a fill char, 
+    # for use as a pretty header
+    my ($char, $msg, $maxlength, $newline) = @_;
+    my ($lstr, $llen, $rstr, $rlen, $msglen, $calctotal);
+    $msglen = length($msg);
+    $llen = int(($maxlength - $msglen - 2) / 2);
+    $calctotal = ($llen * 2) + $msglen + 2;
+    if ($calctotal > $maxlength) {
+        $rlen = $llen - 1;
+    } elsif ($calctotal < $maxlength) {
+        $rlen = $llen + 1;
+    } else {
+        $rlen = $llen;
+    }
+    $lstr = ($char x $llen);
+    $rstr = ($char x $rlen);
+    $msg = $lstr . " " . $msg . " " . $rstr;
+    $msg .= "\n" if ($newline);
+    return $msg;
+}
+
 sub read_config_file {
     my ($file, $var, $val);
     # Config files should be passed in an array as a param to this function.
@@ -163,21 +193,21 @@ sub dump_config {
         $curlen = length($_);
         $maxlen = $curlen if ($curlen > $maxlen);
     }
-    acxi_log($LINE{heavy}, $lvl);
-    acxi_log(qq(==== Current configuration: ====\n), $lvl);
+    acxi_log(line("=", $LINE_LEN{long}, 1), $lvl);
+    acxi_log(header("=", qq(Current configuration:), $LINE_LEN{long}, 1), $lvl);
     foreach my $key (@keys) {
         $strbuf = sprintf("%-${maxlen}s", $key);
         acxi_log(qq($strbuf = $USER_SETTINGS{$key}\n), $lvl);
     }
-    #acxi_log($LINE{large}, $lvl);
+    acxi_log(line("=", $LINE_LEN{long}, 1), $lvl);
 }
 
 # Create destination directories as in source
 sub dircopy {
-    acxi_log($LINE{large}, $LOG{verbose});
-    acxi_log(qq(Syncing source and destinations directories...\n), $LOG{verbose});
+    acxi_log(line("-", $LINE_LEN{short}, 1), $LOG{verbose});
+    acxi_log(header("-", qq(Syncing source and destinations directories...), $LINE_LEN{short}, 1), $LOG{verbose});
     find(\&dircopy_helper, $USER_SETTINGS{DIR_PREFIX_SOURCE});
-    acxi_log(qq(Directory syncronization complete.\n), $LOG{verbose});
+    acxi_log(header("-", qq(Directory syncronization complete), $LINE_LEN{short}, 1), $LOG{verbose});
 }
 
 # Helper function for File::Find ("wanted")
@@ -188,7 +218,7 @@ sub dircopy_helper {
         my $dstx = qq($USER_SETTINGS{DIR_PREFIX_DEST});
         my $newdir = $File::Find::name;
         $newdir =~ s/$srcx/$dstx/;
-        acxi_log($LINE{small}, $LOG{verbose});
+        acxi_log(line("-", $LINE_LEN{short}, 1), $LOG{verbose});
         acxi_log(qq(Creating new directory:\n\t$newdir\n), $LOG{verbose});
         mkdir(qq($newdir)) or acxi_log(qq(Failed to create directory: "$newdir" -  $!\n), $LOG{debug});
     }
@@ -206,16 +236,17 @@ sub dircopy_helper {
 # read config file first, and _then_ set CLI options to override
 read_config_file(@CONFIGS);
 GetOptions(
-    "c|copy:s" => \$USER_SETTINGS{COPY_TYPES}, 
-    "d|destination:s" => \$USER_SETTINGS{DIR_PREFIX_DEST}, 
+    "c|copy=s" => \$USER_SETTINGS{COPY_TYPES}, 
+    "d|destination=s" => \$USER_SETTINGS{DIR_PREFIX_DEST}, 
     "f|force" => "",
-    "i|input:s" => "", 
-    "o|output:s" => "", 
-    "q|quality:s" => "", 
-    "s|source:s" => "",
+    "i|input=s" => \$USER_SETTINGS{INPUT_TYPE}, 
+    "o|output=s" => \$USER_SETTINGS{OUTPUT_TYPE}, 
+    "q|quality=i" => "", 
+    "s|source=s" => \$USER_SETTINGS{DIR_PREFIX_SOURCE},
     "V|version" => sub { Getopt::Long::VersionMessage($EX_{OK}) },
     "v|verbose+" => \$USER_SETTINGS{LOG_LEVEL}, # increases existing level by 1 for each '-v' given
     "Q|quiet|silent" => sub { $USER_SETTINGS{LOG_LEVEL} = $LOG{quiet} }, 
+    "l|level=i" => \$USER_SETTINGS{LOG_LEVEL}, 
     "h|help|?" => \$help, 
     man => \$man
 ) or pod2usage(-exitstatus => $EX_{DATAERR}, -verbose => $LOG{info});
@@ -223,12 +254,12 @@ pod2usage($EX_{OK}) if $help;
 pod2usage(-exitstatus => $EX_{OK}, -verbose => $LOG{verbose}) if $man;
 
 # debug..
-dump_config();
+#dump_config();
 
 #acxi_log(qq(Ladidadida, logging at user or predefined level ($USER_SETTINGS{LOG_LEVEL})\n));
 #acxi_log(qq(Logging at DEBUG, which should not be seen if level < 3\n), $LOG{debug});
 
-#dircopy();
+dircopy();
 
 
 __END__
