@@ -182,12 +182,11 @@ sub dump_config {
     # Dump config for the user to easily see the settings in effect
     my ($maxlen, $curlen, $lvl_forced) = 0;
     my $strbuf = "";
-    my $lvl = \$USER_SETTINGS{LOG_LEVEL};
+    my $lvl = \$USER_SETTINGS{LOG_LEVEL};   # use reference for less typing...
     if ($$lvl < 1) {
         $$lvl = 1;
         $lvl_forced = 1;
     }
-    #acxi_log("Level: $$lvl\n");
 
     # First, loop through hash and find the longest key, 
     # then loop once more, and print contents aligned
@@ -261,17 +260,15 @@ pod2usage($EX_{OK}) if $help;
 pod2usage(-exitstatus => $EX_{OK}, -verbose => $LOG{verbose}) if $man;
 
 # debug..
-#dump_config();
+#...
 
-#acxi_log(qq(Ladidadida, logging at user or predefined level ($USER_SETTINGS{LOG_LEVEL})\n));
-#acxi_log(qq(Logging at DEBUG, which should not be seen if level < 3\n), $LOG{debug});
-
-#dircopy();
 
 
 __END__
 
-## POD documentation (a lot more flexible than inline help functions)
+##########################################################################
+### POD documentation (a lot more flexible than inline help functions) ###
+##########################################################################
 
 =pod
 
