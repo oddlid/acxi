@@ -264,6 +264,9 @@ sub locate_binary {
             return;
         }
     }
+    # If execution reaches this point, no executable by given name was 
+    # found, so set the slot empty
+    $$slot = "";
 }
 
 #sub set_arg_audio {
