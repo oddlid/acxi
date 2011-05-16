@@ -210,9 +210,27 @@ sub dump_config {
 
 # Create destination directories as in source
 sub dircopy {
+    # create reference vars for less typing
+    my $src = \$USER_SETTINGS{DIR_PREFIX_SOURCE};
+    my $dst = \$USER_SETTINGS{DIR_PREFIX_DEST};
+
     acxi_log(line("-", $LINE_LEN{short}, 1), $LOG{verbose});
-    acxi_log(header("-", qq(Syncing source and destinations directories...), $LINE_LEN{short}, 1), $LOG{verbose});
-    find(\&dircopy_helper, $USER_SETTINGS{DIR_PREFIX_SOURCE});
+    acxi_log(header("-", qq(Syncing source and destinations directories...), $LINE_LEN{short}, 1), 
+        $LOG{verbose});
+
+    # Embedding check for src/dst dirs here, instead of in separate function
+    if (! -d qq($$src)) {
+        acxi_log(qq(Error: Source directory "$$src" does not exist. Exiting.\n), 
+            $LOG{info});
+        exit $EX_{IOERR};
+    }
+    if (! -d qq($$dst)) {
+        acxi_log(qq(Error: Destination directory "$$dst" does not exist. Exiting.\n), 
+            $LOG{info});
+        exit $EX_{IOERR};
+    }
+
+    find(\&dircopy_helper, $$src);
     acxi_log(header("-", qq(Directory syncronization complete), $LINE_LEN{short}, 1), $LOG{verbose});
 }
 
@@ -300,10 +318,10 @@ pod2usage($EX_{OK}) if $help;
 pod2usage(-exitstatus => $EX_{OK}, -verbose => $LOG{verbose}) if $man;
 
 # debug..
-dump_config();
-verify_ext_binaries();
-dump_config();
-
+#dump_config();
+#verify_ext_binaries();
+#dump_config();
+dircopy();
 
 
 __END__
