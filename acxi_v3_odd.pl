@@ -78,7 +78,8 @@ my @CONFIGS = (
     qq($ENV{HOME}/.acxi.conf)
 );
 
-my @OUTPUT_TYPES = ("ogg", "mp3");
+my @INPUT_TYPES  = qq(flac wav raw);
+my @OUTPUT_TYPES = qq(ogg mp3);
 
 #my %ARG_ENCODER_VERBOSITY = (
 #    mp3 => %{$LOG{QUIET} => "--quiet";
@@ -272,6 +273,7 @@ sub is_executable {
 
 sub locate_binary {
     # Try to locate file in $ENV{PATH}
+    # $slot must be passed as a reference
     my ($filename, $slot) = @_;
     my $fullpath = "";
     $filename = fileparse($filename);
@@ -285,6 +287,33 @@ sub locate_binary {
     # If execution reaches this point, no executable by given name was 
     # found, so set the slot empty
     $$slot = "";
+}
+
+sub check_io_formats {
+    # Check if the specified input/output formats are valid, 
+    # and exit script if not.
+    my $ifmt = \$USER_SETTINGS{INPUT_TYPE};     # ref
+    my $ofmt = \$USER_SETTINGS{OUTPUT_TYPE};    # ref
+    my $iok = 0;
+    my $ook = 0;
+
+    foreach (@INPUT_TYPES) {
+        $iok = 1 if $_ eq $$ifmt;
+    }
+    foreach (@OUTPUT_TYPES) {
+        $ook = 1 if $_ eq $$ofmt;
+    }
+    if (1 == $iok) {
+        acxi_log(qq(Error: input format "$$ifmt" not supported.\n), $LOG{info});
+        acxi_log(qq(Supported formats: ) . join(", ", @INPUT_TYPES) . "\n", $LOG{info});
+        exit $EX_{CONFIG};
+    }
+    if (1 == $ook) {
+        acxi_log(qq(Error: output format "$$ofmt" not supported.), $LOG{info});
+        acxi_log(qq(Supported formats: ) . join(", ", @OUTPUT_TYPES) . "\n", $LOG{info});
+        exit $EX_{CONFIG};
+    }
+    return $EX_{OK};
 }
 
 #sub set_arg_audio {
@@ -321,7 +350,10 @@ pod2usage(-exitstatus => $EX_{OK}, -verbose => $LOG{verbose}) if $man;
 #dump_config();
 #verify_ext_binaries();
 #dump_config();
-dircopy();
+#dircopy();
+if (check_io_formats() == $EX_{OK}) {
+    acxi_log("Formats OK\n");
+}
 
 
 __END__
