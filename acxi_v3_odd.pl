@@ -30,6 +30,7 @@ my $help = 0;   # for Pod::Usage brief help msg
 my $man = 0;    # for Pod::Usage full documentation
 
 # Exit codes, copied from Linux sysexits.h, to follow standards.
+# TODO: replace these values with error codes from %! (see perlvar).
 my %EX_ = (
     OK          => 0,   # successful termination 
     _BASE       => 64,  # base value for error messages 
@@ -90,16 +91,16 @@ my @OUTPUT_TYPES = qq(ogg mp3);
 # Settings not present in the config file will stay as defined here.
 my %USER_SETTINGS = (
     LOG_LEVEL           => $LOG{info}, 
-    DIR_PREFIX_SOURCE   => "$ENV{HOME}/flac", 
-    DIR_PREFIX_DEST     => "$ENV{HOME}/ogg", 
+    DIR_PREFIX_SOURCE   => qq($ENV{HOME}/flac), 
+    DIR_PREFIX_DEST     => qq($ENV{HOME}/ogg), 
     QUALITY             => 7, 
-    INPUT_TYPE          => "flac", 
-    OUTPUT_TYPE         => "ogg", 
-    COPY_TYPES          => "bmp,jpg,jpeg,tif,doc,docx,odt,pdf,txt", 
-    COMMAND_OGG         => "/path/to/oggenc", 
-    COMMAND_LAME        => "/path/to/lame", 
-    COMMAND_FLAC        => "/path/to/flac", 
-    COMMAND_METAFLAC    => "/path/to/metaflac"
+    INPUT_TYPE          => q(flac), 
+    OUTPUT_TYPE         => q(ogg), 
+    COPY_TYPES          => q(bmp,jpg,jpeg,tif,doc,docx,odt,pdf,txt), 
+    COMMAND_OGG         => q(/path/to/oggenc), 
+    COMMAND_LAME        => q(/path/to/lame), 
+    COMMAND_FLAC        => q(/path/to/flac), 
+    COMMAND_METAFLAC    => q(/path/to/metaflac)
 );
 ## END user settings
 
@@ -247,6 +248,8 @@ sub dircopy_helper {
         acxi_log(qq(Creating new directory:\n\t$newdir\n), $LOG{verbose});
         mkdir(qq($newdir)) or acxi_log(qq(Failed to create directory: "$newdir" -  $!\n), $LOG{debug});
     }
+    # not quite sure yet whether it's best to put all the rest code for conversion/copying here, 
+    # or if it's better to create a separate function for that.
 }
 
 sub verify_ext_binaries {
@@ -446,7 +449,7 @@ Copy *.png and *.jpg files found in the source directories, set top level source
 
 =head1 CONFIGURATION
 
-/etc/acxi.conf (systemwide), ~/.acxi.conf (user)
+F</etc/acxi.conf> (systemwide), F<~/.acxi.conf> (user)
 
 The systemwide config is read first if found, then the user config if found, and then command line parameters if set.
 
