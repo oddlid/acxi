@@ -79,8 +79,8 @@ my @CONFIGS = (
     qq($ENV{HOME}/.acxi.conf)
 );
 
-my @INPUT_TYPES  = qq(flac wav raw);
-my @OUTPUT_TYPES = qq(ogg mp3);
+my @INPUT_TYPES  = qw(flac wav raw);
+my @OUTPUT_TYPES = qw(ogg mp3);
 
 #my %ARG_ENCODER_VERBOSITY = (
 #    mp3 => %{$LOG{QUIET} => "--quiet";
