@@ -9,7 +9,10 @@
 # The latest version can be obtained via git, like this:
 #   git clone git://gbg.oddware.net/acxi.git
 #
-# Odd Eivind Ebbesen <oddebb@gmail.com>, 2011-04-07 02:20:24
+# Starting a new version today, with the goal of making the whole 
+# program multithreaded.
+#
+# Odd Eivind Ebbesen <oddebb@gmail.com>, 2011-07-25 14:26:00
 
 ## Start code
 use strict;
