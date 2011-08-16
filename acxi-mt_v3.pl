@@ -34,12 +34,14 @@ BEGIN {
 # if we got here, threads are in place and ok
 use threads;
 use threads::shared;
+use Thread::Queue;
 use Getopt::Long qw(:config auto_version auto_help no_ignore_case);
 use Pod::Usage;
 use File::Find;
 use File::Basename;
 use File::Spec;
 use Cwd;
+use Data::Dumper;
 
 # G = global. Hash for all global settings/values.
 my %_G = (
@@ -75,49 +77,34 @@ my %_G = (
    }
 );
 #-------------------------------------------------------------------------------
-{
-   package Acxi_worker; 
-   sub hello {
-      print('Hello from ', __PACKAGE__, "\n");
-   }
-
-   sub enqueue {
-      my ($srcdir, $dstdir) = @_;
-      if (defined($srcdir) && defined($dstdir)) {
-         threads->create(\&_exec, $srcdir, $dstdir);
-      }
-   }
-
-   sub _exec {
-      sleep(int(rand(20)));
-      threads->yield();
-      printf("In a new thread (ID: %d), with srcdir: %s and dstdir: %s\n", 
-         threads->tid(), $_[0], $_[1]);
-      print('-' x threads->tid(), "\n");
-   }
-
-   sub cleanup {
-      foreach my $t (threads->list()) {
-         $t->join();
-      }
-   }
-}   # END Acxi_worker
-
-{
-   package Acxi_util;
-
-   sub get_flac_tags {
-      my $ifile = shift;
-      return unless (defined($ifile));
-      return unless (-r "$ifile");
-      my @tags = qw(ARTIST ALBUM TITLE GENRE DATE TRACKNUMBER);
-      my $cmd = qq(/usr/bin/metaflac "$ifile");
-      foreach (@tags) {
-         $cmd .= ' --show-tag=' . $_;
-      }
-      print($cmd, "\n");
-   }
-}   # END Acxi_util
+#{
+#   package Acxi_worker; 
+#   sub hello {
+#      print('Hello from ', __PACKAGE__, "\n");
+#   }
+#
+#   sub enqueue {
+#      my ($srcdir, $dstdir) = @_;
+#      if (defined($srcdir) && defined($dstdir)) {
+#         threads->create(\&_exec, $srcdir, $dstdir);
+#      }
+#   }
+#
+#   sub _exec {
+#      sleep(int(rand(20)));
+#      threads->yield();
+#      printf("In a new thread (ID: %d), with srcdir: %s and dstdir: %s\n", 
+#         threads->tid(), $_[0], $_[1]);
+#      print('-' x threads->tid(), "\n");
+#   }
+#
+#   sub cleanup {
+#      foreach my $t (threads->list()) {
+#         $t->join();
+#      }
+#   }
+#   1;
+#}   # END Acxi_worker
 
 {
    package Acxi_mediaFile;
@@ -125,98 +112,173 @@ my %_G = (
    use warnings;
    use Data::Dumper;
 
+   use constant {
+      MP3   => 0x4D5033,   # 'MP3' in hex
+      OGG   => 0x4F4747,   # 'OGG' in hex
+      WAV   => 0x574156,   # 'WAV' in hex
+      RAW   => 0x524156,   # 'RAW' in hex
+      FLAC  => 0x0DDEE     # ...who wrote this...?
+   };
+
+   # static class data
+   my %_x = (
+      lame     => undef,
+      flac     => undef,
+      file     => undef,
+      oggenc   => undef,
+      metaflac => undef
+   );
+   my $_output_format = undef;
+
    # stub for constructor
    sub new {
       # This inits the object instance with the required info.
       # Expected parameters:
       # - hash reference, with these keywords accepted:
       #   * filename - full path to the flac file
-      #   * metaflac - reference to a string with the full path to metaflac binary
-      #   * ...
-      my $this = shift;
-      my $class = ref($this) || $this;
-      my $self = {};
+      my $this    = shift;
+      my $class   = ref($this) || $this;
+      my $self    = {};
       bless($self, $class);
-      #...
+
+      #$self->{err} = 0; # OK if 0, else, something wrong...
 
       my $arg_href = shift || \{}; # should be a hash ref 
       if (!ref($arg_href) eq 'HASH') {
          print(__PACKAGE__ . "::new() : Not a HASH reference\n");
       }
-      foreach my $k (keys(%$arg_href)) {
-         print("Arg: " . $k . " = " . $$arg_href{$k} . "\n");
+      if (defined($arg_href->{filename}) && (-r $arg_href->{filename})){
+         $self->{filename} = $arg_href->{filename};
+      }
+      if (defined($arg_href->{dstdir}) && (-d $arg_href->{dstdir} && -w $arg_href->{dstdir})){
+         $self->{dstdir} = $arg_href->{dstdir};
       }
 
-      $self->{filename} = $arg_href->{filename} if defined($arg_href->{filename});
-      $self->{metaflac} = $arg_href->{metaflac};# if defined($arg_href->{metaflac});
-      print(Dumper($self), "\n");
-      #print("grias...." . ref $self->{metaflac} . "\n");
+      if (defined($self->{filename})) {
+         $self->_set_mime_type();
+         $self->_load_flac_tags();
+         #$self->_convert();
+      }
 
-      #$self->{_path} = "/some/where";
-      #$self->{_filename} = "file.flac";
-      #$self->{_fullpath} = "";
-      #$self->{_fullpath} = File::Spec->catfile($self->{_path}, $self->{_filename});
+      print(Dumper($self), "\n");
 
       return $self;
+   }  # END new()
+
+   sub set_extbins {
+      my $xhref = shift;
+      #print(Dumper($xhref), "\n");
+      while (my ($name, $path) = each(%$xhref)) {
+         if (-x $path) {
+            $_x{$name} = $path;
+         }
+      }
    }
 
-   sub load_tags {
+   sub set_output_format {
+      my $f = shift;
+      if ($f == MP3 || $f == OGG || $f == WAV || $f == RAW || $f == FLAC) {
+         $_output_format = $f;
+      }
+   }
+
+   sub _set_mime_type {
       my $self = shift;
-      #my $mf_path = shift || \'/usr/bin/metaflac';
-      #return unless (ref($mf_path));
-      #print("MF: $$mf_path\n");
-      #return unless (-X $self->{metaflac});
+      my $mtype;
+      if (defined($_x{file})) {
+         $mtype = `$_x{file} -bi "$self->{filename}"`;
+         chomp($mtype);
+         $mtype =~ s/;.*//g;
+         $self->{mimetype} = $mtype;
+      }
+   }
+
+   sub _load_flac_tags {
+      my $self = shift;
+      return unless ($self->{mimetype} eq 'audio/x-flac');
       my $cmd;
       my @tagnames = qw(ARTIST ALBUM TITLE GENRE DATE TRACKNUMBER);
-      $cmd = ${$self->{metaflac}} . qq( "$self->{filename}" );
+      $cmd = $_x{metaflac} . qq( "$self->{filename}" );
       foreach (@tagnames) {
          $cmd .= ' --show-tag=' . $_;
       }
-      print("Acxi_mediaFile::load_tags() : cmd = $cmd\n");
+      my @tags = `$cmd`;
+      foreach (@tags) {
+         $_ =~ s/.*=//g;
+         chomp;
+      }
+      $self->{tags} = {
+         artist      => $tags[0],
+         album       => $tags[1], 
+         title       => $tags[2], 
+         genre       => $tags[3], 
+         date        => $tags[4],
+         tracknumber => $tags[5]
+      };
    }
+
+   sub get_tags {
+      my $self = shift;
+      #return undef if ($self->{err});
+      return $self->{tags};
+   }
+
+   sub get_tag {
+      my $self = shift;
+      #return undef if ($self->{err});
+      my $key = shift;
+      return $self->{tags}{$key};
+   }
+
+   sub _to_mp3 {}
+   sub _to_ogg {}
+
+   sub convert {
+      printf(__PACKAGE__ . "::_convert() : format = %x\n", $_output_format);
+   }
+
+   1;
 }   # END Acxi_mediaFile
 
-{
-   package Acxi_test;
-   sub ding {
-      print('Ding from ', __PACKAGE__, "\n");
-      Acxi_worker::hello();
-   }
-}
 #-------------------------------------------------------------------------------
 
 
-#sub dong {
-#   print('Dong from ', __PACKAGE__, "\n");
-#   Acxi_test::ding();
-#}
-
-#for my $i (0 .. 20) {
-#   Acxi_worker::enqueue($i, $i + 1);
-#}
-#Acxi_worker::cleanup();
-#dong();
-#Acxi_util::get_flac_tags('raff.flac');
-
-#foreach my $key (keys %!) {
-#   printf("%s\n", $key);
-#}
-
-
-my $mflac = '/usr/bin/file';
-my %args = (
-   metaflac => \$mflac,
-   test => 'raff',
-   filename => '/a/file/some/where.flac'
+my @threads;
+my %bin = (
+   lame     => '/usr/bin/lame',
+   flac     => '/usr/bin/flac',
+   file     => '/usr/bin/file',
+   oggenc   => '/usr/bin/oggenc',
+   metaflac => '/usr/bin/metaflac'
 );
-my $mf = Acxi_mediaFile->new(\%args);
-$mf->load_tags();
+Acxi_mediaFile::set_extbins(\%bin);
+Acxi_mediaFile::set_output_format(Acxi_mediaFile::OGG);
 
+sub _q {
+   my $arg_href = shift;
+   push(@threads, 
+      threads->create(
+         sub { 
+            Acxi_mediaFile->new($arg_href);
+         }
+      )
+   );
+}
+
+_q( { filename => '/mnt/net/media/music/Madder Mortem/Desiderata/02 - Evasions.flac' });
+_q( { filename => '/mnt/net/media/music/Madder Mortem/Desiderata/10 - Sedition.flac' });
+
+print("Number of threads: ", scalar(@threads), "\n");
 
 #-------------------------------------------------------------------------------
 # Global module destructor
-#END {
-#}
+END {
+   while (my $t = shift(@threads)) {
+      printf("Waiting for thread: %d ...\n", $t->tid());
+      $t->join();
+   }
+
+}
 #-------------------------------------------------------------------------------
 
 1;  # return "true"
