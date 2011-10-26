@@ -8,6 +8,8 @@
 # Odd Eivind Ebbesen, 2011-07-25 15:03:08
 #-------------------------------------------------------------------------------
 
+package Acxi;
+
 use strict;
 use warnings;
 
@@ -31,6 +33,7 @@ BEGIN {
       print("Threading is OK (level: $threadlevel), good to go!\n");
    }
 }
+
 # if we got here, threads are in place and ok
 use threads;
 use threads::shared;
@@ -45,40 +48,41 @@ use Data::Dumper;
 
 # G = global. Hash for all global settings/values.
 my %_G = (
-   EX => {  # Exception/exit codes
-      OK          => 0,   # successful termination 
-      _BASE       => 64,  # base value for error messages 
-      USAGE       => 64,  # command line usage error 
-      DATAERR     => 65,  # data format error 
-      NOINPUT     => 66,  # cannot open input 
-      NOUSER      => 67,  # addressee unknown 
-      NOHOST      => 68,  # host name unknown 
-      UNAVAILABLE => 69,  # service unavailable 
-      SOFTWARE    => 70,  # internal software error 
-      OSERR       => 71,  # system error (e.g., can't fork) 
-      OSFILE      => 72,  # critical OS file missing 
-      CANTCREAT   => 73,  # can't create (user) output file 
-      IOERR       => 74,  # input/output error 
-      TEMPFAIL    => 75,  # temp failure; user is invited to retry 
-      PROTOCOL    => 76,  # remote error in protocol 
-      NOPERM      => 77,  # permission denied 
-      CONFIG      => 78,  # configuration error 
-      _MAX        => 78   # maximum listed value 
-   }, 
-   LOG => { # Same name for levels as in Log4perl
+   EX => {    # Exception/exit codes
+      OK          => 0,     # successful termination
+      _BASE       => 64,    # base value for error messages
+      USAGE       => 64,    # command line usage error
+      DATAERR     => 65,    # data format error
+      NOINPUT     => 66,    # cannot open input
+      NOUSER      => 67,    # addressee unknown
+      NOHOST      => 68,    # host name unknown
+      UNAVAILABLE => 69,    # service unavailable
+      SOFTWARE    => 70,    # internal software error
+      OSERR       => 71,    # system error (e.g., can't fork)
+      OSFILE      => 72,    # critical OS file missing
+      CANTCREAT   => 73,    # can't create (user) output file
+      IOERR       => 74,    # input/output error
+      TEMPFAIL    => 75,    # temp failure; user is invited to retry
+      PROTOCOL    => 76,    # remote error in protocol
+      NOPERM      => 77,    # permission denied
+      CONFIG      => 78,    # configuration error
+      _MAX        => 78     # maximum listed value
+   },
+   LOG => {                 # Same name for levels as in Log4perl
       OFF   => 0,
-      FATAL => 0, 
-      ERROR => 0, 
-      WARN  => 0, 
-      INFO  => 0, 
-      DEBUG => 0, 
-      TRACE => 0, 
+      FATAL => 0,
+      ERROR => 0,
+      WARN  => 0,
+      INFO  => 0,
+      DEBUG => 0,
+      TRACE => 0,
       ALL   => 0
    }
 );
+
 #-------------------------------------------------------------------------------
 #{
-#   package Acxi_worker; 
+#   package Acxi_worker;
 #   sub hello {
 #      print('Hello from ', __PACKAGE__, "\n");
 #   }
@@ -93,7 +97,7 @@ my %_G = (
 #   sub _exec {
 #      sleep(int(rand(20)));
 #      threads->yield();
-#      printf("In a new thread (ID: %d), with srcdir: %s and dstdir: %s\n", 
+#      printf("In a new thread (ID: %d), with srcdir: %s and dstdir: %s\n",
 #         threads->tid(), $_[0], $_[1]);
 #      print('-' x threads->tid(), "\n");
 #   }
@@ -112,12 +116,12 @@ my %_G = (
    use warnings;
    use Data::Dumper;
 
-   use constant {
-      MP3   => 0x4D5033,   # 'MP3' in hex
-      OGG   => 0x4F4747,   # 'OGG' in hex
-      WAV   => 0x574156,   # 'WAV' in hex
-      RAW   => 0x524156,   # 'RAW' in hex
-      FLAC  => 0x0DDEE     # ...who wrote this...?
+   use constant FORMATS => {
+      MP3  => 0x4D5033,    # 'MP3' in hex
+      OGG  => 0x4F4747,    # 'OGG' in hex
+      WAV  => 0x574156,    # 'WAV' in hex
+      RAW  => 0x524156,    # 'RAW' in hex
+      FLAC => 0x00DDEE     # ...who wrote this...?
    };
 
    # static class data
@@ -131,43 +135,48 @@ my %_G = (
    my $_output_format = undef;
 
    # stub for constructor
-   sub new {
+   sub new(\%) {
+
       # This inits the object instance with the required info.
       # Expected parameters:
       # - hash reference, with these keywords accepted:
       #   * filename - full path to the flac file
-      my $this    = shift;
-      my $class   = ref($this) || $this;
-      my $self    = {};
+      my $this  = shift;
+      my $class = ref($this) || $this;
+      my $self  = {};
       bless($self, $class);
 
       #$self->{err} = 0; # OK if 0, else, something wrong...
 
-      my $arg_href = shift || \{}; # should be a hash ref 
-      if (!ref($arg_href) eq 'HASH') {
-         print(__PACKAGE__ . "::new() : Not a HASH reference\n");
-      }
-      if (defined($arg_href->{filename}) && (-r $arg_href->{filename})){
+      my $arg_href = shift;   # || \{};    # should be a hash ref
+      # prototyping takes care of this check
+      #if (!ref($arg_href) eq 'HASH') {
+      #   print(__PACKAGE__ . "::new() : Not a HASH reference\n");
+      #}
+      if (defined($arg_href->{filename}) && (-r $arg_href->{filename})) {
          $self->{filename} = $arg_href->{filename};
       }
-      if (defined($arg_href->{dstdir}) && (-d $arg_href->{dstdir} && -w $arg_href->{dstdir})){
+      if (defined($arg_href->{dstdir})
+         && (-d $arg_href->{dstdir} && -w $arg_href->{dstdir}))
+      {
          $self->{dstdir} = $arg_href->{dstdir};
       }
 
       if (defined($self->{filename})) {
          $self->_set_mime_type();
          $self->_load_flac_tags();
+
          #$self->_convert();
       }
 
       print(Dumper($self), "\n");
 
       return $self;
-   }  # END new()
+   }    # END new()
 
-   sub set_extbins {
+   sub set_extbins(\%) {
       my $xhref = shift;
-      #print(Dumper($xhref), "\n");
+
       while (my ($name, $path) = each(%$xhref)) {
          if (-x $path) {
             $_x{$name} = $path;
@@ -175,10 +184,19 @@ my %_G = (
       }
    }
 
-   sub set_output_format {
+   sub set_output_format($) {
       my $f = shift;
-      if ($f == MP3 || $f == OGG || $f == WAV || $f == RAW || $f == FLAC) {
+      if (  $f == FORMATS->{MP3}
+         || $f == FORMATS->{OGG}
+         || $f == FORMATS->{WAV}
+         || $f == FORMATS->{RAW}
+         || $f == FORMATS->{FLAC})
+      {
          $_output_format = $f;
+         printf("Output format: %x\n", $f);
+      }
+      else {
+         printf("Invalid format: %x\n", $f);
       }
    }
 
@@ -209,9 +227,9 @@ my %_G = (
       }
       $self->{tags} = {
          artist      => $tags[0],
-         album       => $tags[1], 
-         title       => $tags[2], 
-         genre       => $tags[3], 
+         album       => $tags[1],
+         title       => $tags[2],
+         genre       => $tags[3],
          date        => $tags[4],
          tracknumber => $tags[5]
       };
@@ -219,31 +237,37 @@ my %_G = (
 
    sub get_tags {
       my $self = shift;
+
       #return undef if ($self->{err});
       return $self->{tags};
    }
 
    sub get_tag {
       my $self = shift;
+
       #return undef if ($self->{err});
       my $key = shift;
       return $self->{tags}{$key};
    }
 
-   sub _to_mp3 {}
-   sub _to_ogg {}
+   sub _to_mp3 { }
+   sub _to_ogg { }
 
    sub convert {
       printf(__PACKAGE__ . "::_convert() : format = %x\n", $_output_format);
    }
 
    1;
-}   # END Acxi_mediaFile
+}    # END Acxi_mediaFile
 
 #-------------------------------------------------------------------------------
 
 
-my @threads;
+sub _start_job(\%) {
+   Acxi_mediaFile->new(shift);
+}
+
+my @jobs;
 my %bin = (
    lame     => '/usr/bin/lame',
    flac     => '/usr/bin/flac',
@@ -251,37 +275,36 @@ my %bin = (
    oggenc   => '/usr/bin/oggenc',
    metaflac => '/usr/bin/metaflac'
 );
-Acxi_mediaFile::set_extbins(\%bin);
-Acxi_mediaFile::set_output_format(Acxi_mediaFile::OGG);
+Acxi_mediaFile::set_extbins(%bin);
+Acxi_mediaFile::set_output_format(Acxi_mediaFile::FORMATS->{OGG});
 
-sub _q {
-   my $arg_href = shift;
-   push(@threads, 
-      threads->create(
-         sub { 
-            Acxi_mediaFile->new($arg_href);
-         }
-      )
-   );
-}
+push(
+   @jobs,
+   { filename => '/mnt/net/media/music/Madder Mortem/Desiderata/02 - Evasions.flac' },
+   { filename => '/mnt/net/media/music/Madder Mortem/Desiderata/10 - Sedition.flac' },
+);
 
-_q( { filename => '/mnt/net/media/music/Madder Mortem/Desiderata/02 - Evasions.flac' });
-_q( { filename => '/mnt/net/media/music/Madder Mortem/Desiderata/10 - Sedition.flac' });
 
-print("Number of threads: ", scalar(@threads), "\n");
+print(Dumper(@jobs));
+
+async {
+   foreach (@jobs) {
+      threads->create('_start_job', $_);
+   }
+}->join();
 
 #-------------------------------------------------------------------------------
 # Global module destructor
 END {
-   while (my $t = shift(@threads)) {
-      printf("Waiting for thread: %d ...\n", $t->tid());
-      $t->join();
+   foreach (threads->list()) {
+      printf("Waiting for thread #%d ...\n", $_->tid());
+      $_->join();
    }
-
 }
+
 #-------------------------------------------------------------------------------
 
-1;  # return "true"
+1;    # return "true"
 __END__
 
 #-------------------------------------------------------------------------------
