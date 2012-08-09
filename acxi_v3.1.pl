@@ -7,9 +7,9 @@ use strict;
 use warnings;
 use mro 'c3';
 
+{    # Helper class for logging
 
-package Acxi::Logger {
-   # Helper class for logging
+   package Acxi::Logger;
 
    use constant ERR    => 0;
    use constant WARN   => 1;
@@ -98,7 +98,60 @@ package Acxi::Logger {
       $self->log(ERR, @_);
    }
 
-};
+}    # END package Acxi::Logger
+
+#---
+
+{    # Helper class for stat operations
+
+   package Acxi::Fcmp;
+   use File::stat;    # for named fields from stat()
+
+   use constant F_BASE      => 0x001;
+   use constant F_SRC_EXIST => F_BASE << 1;
+   use constant F_DST_EXIST => F_BASE << 2;
+   use constant F_SRC_AGE   => F_BASE << 3;
+   use constant F_DST_AGE   => F_BASE << 4;
+
+   my $_instance;
+
+   sub new {
+      $_instance //= bless({}, shift);
+      return $_instance;
+   }
+
+   sub statbuf {
+      my $self  = shift;
+      my $which = shift;    # 0 for src, 1 for dst
+
+      # Undef if not initialized
+      return $which ? $self->{dst}{stat} : $self->{src}{stat};
+   }
+
+   sub mtime {
+      my $self     = shift;
+      my $src_file = shift;
+      my $dst_file = shift;
+      my $flags    = F_BASE;
+      $self->{src}{stat} = my $s = stat($src_file);
+      $self->{dst}{stat} = my $d = stat($dst_file);
+
+      $flags |= F_SRC_EXIST if ($s);
+      $flags |= F_DST_EXIST if ($d);
+      return $flags if (!$s);
+      if ($s && $d && $s->mtime > $d->mtime) {
+         $flags |= F_SRC_AGE;
+      }
+      elsif ($s && $d && $s->mtime == $d->mtime) {
+         $flags |= F_SRC_AGE | F_DST_AGE;
+      }
+      elsif ($s && $d && $s->mtime < $d->mtime) {
+         $flags |= F_DST_AGE;
+      }
+
+      return $flags;
+   }
+};    # END package Acxi::Fcmp
 
 #---
 
@@ -114,6 +167,7 @@ use IO::File;
 use File::Find;
 use File::Basename;
 use File::Spec;
+use IPC::Cmd qw(can_run run run_forked QUOTE);
 use POSIX ':sys_wait_h';
 use Errno;
 use Cwd;
@@ -121,8 +175,6 @@ use Carp;
 
 # set to 0 in production
 $Carp::Verbose = 1;
-
-
 
 our $VERSION;
 
@@ -254,12 +306,24 @@ sub _utype_ok {
 }
 
 sub _type_ignore {
-   my $file = shift;
-   my $ext = _fext($file);
-   my @valid_types = (@{$_config->{ok_in}}, @{$_config->{ok_out}}, @{$_config->{user_settings}{USER_TYPES}});
-   my @hits = grep { $_ eq $ext } @valid_types;
+   my $file        = shift;
+   my $ext         = _fext($file);
+   my @valid_types = (@{ $_config->{ok_in} }, @{ $_config->{ok_out} }, @{ $_config->{user_settings}{USER_TYPES} });
+   my @hits        = grep { $_ eq $ext } @valid_types;
    return wantarray ? @hits : @hits == 0;
 }
+
+#sub _cmp_file_mtime {
+#   my $src = shift;
+#   my $dst = shift;
+#   my $src_sdata = stat($src);
+#   my $dst_sdata = stat($dst);
+#
+#   #return -1 unless($dst_sdata and $src_sdata);
+#   return 1 if ($src_sdata->mtime > $dst_sdata->mtime);
+#   return 0 if ($src_sdata->mtime == $dst_sdata->mtime);
+#   return -1;
+#}
 
 sub _locate_ext_binaries() {
    my @paths = split(/:/, $ENV{PATH});    # cache this before loop
@@ -330,9 +394,41 @@ sub _spawn(&) {
    exit($coderef->());
 }
 
+my $_worker = sub {
+   # 1: find out input format, and read tag info
+   # 2: find out output format, and generate correct params to encoder
+   # 3: exec decoder <args> | encoder <args>
+   # Alternatively, open two IPC pipes instead of a subshell
+};
+
+sub _build_cmd {
+   my $ifile = shift;
+   my @deccmds;    # decoder, left of pipe
+   my @enccmds;    # encoder, right of pipe
+   my $tags;
+
+   if ($_config->{user_settings}{INPUT_TYPE} eq 'flac') {
+      push(@deccmds, $_config->{user_settings}{COMMAND_FLAC}, '-d', '-c', QUOTE . $ifile . QUOTE);
+      $tags = _get_tags_flac($ifile);
+   }
+   #...
+   if ($_config->{user_settings}{OUTPUT_TYPE} eq 'mp3') {
+      push(@enccmds,
+         $_config->{user_settings}{COMMAND_LAME}, '-h',
+         '-V',                                    $_config->{user_settings}{QUALITY},
+         '--ta',                                  QUOTE . $tags->{ARTIST} . QUOTE,
+         '--tl',                                  QUOTE . $tags->{ALBUM} . QUOTE,
+         '--tt',                                  QUOTE . $tags->{TITLE} . QUOTE,
+         '--tn',                                  QUOTE . $tags->{TRACKNUMBER} . QUOTE,
+         '--tg',                                  QUOTE . $tags->{GENRE} . QUOTE,
+         '--ty',                                  QUOTE . $tags->{DATE} . QUOTE);
+   }
+   return [ @deccmds, '|', @enccmds ];
+}
+
 sub _find_flt {
    # 1: bail out if symlink or banned name
-   return unless (! -l && !/^.{1,2}$/ && !/\n$/);
+   return unless (!-l && !/^.{1,2}$/ && !/\n$/);
    # cache if file can be read
    my $readable = -r;
    # 2: check if directory -
@@ -363,30 +459,72 @@ sub _find_flt {
    #        * spawn off and convert/encode src to trg media file
    elsif ($readable && _iotype_ok(file => $File::Find::name, direction => 'in')) {
       $_l->debug("Valid media file: $File::Find::name");
-      if ($_cur_mime eq $_config->{mime_types}{$_config->{user_settings}{INPUT_TYPE}}) {
+      if ($_cur_mime eq $_config->{mime_types}{ $_config->{user_settings}{INPUT_TYPE} }) {
          $_l->debug("Match found, forking...");
-         _spawn sub {
-            open(my $hnd, "|-", '/bin/echo') or croak($!);
-            print($hnd "From child, jajaja\n\n");
-            close($hnd) or croak($!);
-         };
+#         _spawn(sub {
+#            $| = 1;
+#            sleep(3);
+#            open(my $hnd, "|-", '/bin/cat') or croak($!);
+#            print($hnd "\nFrom child, jajaja\n");
+#            close($hnd) or croak($!);
+#            $_l->notice("Child done");
+#         });
+         _spawn (
+            sub {
+#               my ($rv, $err, $buf_all, $buf_stdout, $buf_stderr) =
+#                 run(command => [ '/bin/echo', 'testing', '|', '/bin/cat' ], [ verbose => 1 ]);
+#               sleep(3);
+#               $_l->debug("Output from child: " . Dumper($buf_stdout));
+               my $cmds = _build_cmd($File::Find::name);
+               $_l->debug("Commands to run: \n\t@$cmds");
+            }
+         );
+         #$_l->debug("Return from forked run: " . Dumper($ret));
       }
    }
    else {
-      # if it reaches here, it might be that the file has a valid input 
-      # format extension, but that the mime type is not verified, and 
+      # if it reaches here, it might be that the file has a valid input
+      # format extension, but that the mime type is not verified, and
       # hence should not be opened by decoders or similar.
-      # We can read $_cur_mime here, as it has to have been set from the call to 
+      # We can read $_cur_mime here, as it has to have been set from the call to
       # _iotype_ok above.
       $_l->debug(qq{File ignored for unknown reason: "$File::Find::name" (mime-type = $_cur_mime)\n});
    }
 }
 
-### 
+###
 
-_init();
-$SIG{CHLD} = \&_grim_reaper;
-find(\&_find_flt, $_rx_srcdir);
+#_init();
+#$SIG{CHLD} = \&_grim_reaper;
+#find(\&_find_flt, $_rx_srcdir);
+
+# wait for children
+#while (wait() != -1) {}
+
+my $src  = shift;
+my $dst  = shift;
+my $fcmp = Acxi::Fcmp->new();
+my $rv   = $fcmp->mtime($src, $dst);
+printf("Comparing $src and $dst returns: %#.4o\n", $rv);
+if ($rv & Acxi::Fcmp::F_SRC_EXIST) {
+   if ($rv & Acxi::Fcmp::F_DST_EXIST) {
+      if (($rv & Acxi::Fcmp::F_SRC_AGE) && !($rv & Acxi::Fcmp::F_DST_AGE)) {
+         print("src exists, dst exists, src is newer, so dst will be updated\n");
+      }
+      elsif (($rv & Acxi::Fcmp::F_DST_AGE) && !($rv & Acxi::Fcmp::F_SRC_AGE)) {
+         print("src exists, dst exists, dst is newer, so nothing will be done\n");
+      }
+      elsif (($rv & Acxi::Fcmp::F_SRC_AGE) && ($rv & Acxi::Fcmp::F_DST_AGE)) {
+         print("src exists, dst exists, both are the same age, nothing to do\n");
+      }
+   }
+   else {
+      print("src exists, dst does not, so go ahead and create new file\n");
+   }
+}
+else {
+   print("src does not exist, nothing can be done\n");
+}
 
 __END__
 
