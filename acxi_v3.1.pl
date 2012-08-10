@@ -107,7 +107,7 @@ use mro 'c3';
    package Acxi::Fcmp;
    use File::stat;    # for named fields from stat()
 
-   use constant F_BASE      => 0x001;
+   use constant F_BASE      => 0x0001;
    use constant F_SRC_EXIST => F_BASE << 1;
    use constant F_DST_EXIST => F_BASE << 2;
    use constant F_SRC_AGE   => F_BASE << 3;
@@ -116,8 +116,7 @@ use mro 'c3';
    my $_instance;
 
    sub new {
-      $_instance //= bless({}, shift);
-      return $_instance;
+      return $_instance //= bless({}, shift);
    }
 
    sub statbuf {
@@ -313,18 +312,6 @@ sub _type_ignore {
    return wantarray ? @hits : @hits == 0;
 }
 
-#sub _cmp_file_mtime {
-#   my $src = shift;
-#   my $dst = shift;
-#   my $src_sdata = stat($src);
-#   my $dst_sdata = stat($dst);
-#
-#   #return -1 unless($dst_sdata and $src_sdata);
-#   return 1 if ($src_sdata->mtime > $dst_sdata->mtime);
-#   return 0 if ($src_sdata->mtime == $dst_sdata->mtime);
-#   return -1;
-#}
-
 sub _locate_ext_binaries() {
    my @paths = split(/:/, $ENV{PATH});    # cache this before loop
    foreach my $cmd (qw/FLAC METAFLAC OGG LAME FILE/) {
@@ -494,37 +481,37 @@ sub _find_flt {
 
 ###
 
-#_init();
+_init();
 #$SIG{CHLD} = \&_grim_reaper;
-#find(\&_find_flt, $_rx_srcdir);
+find(\&_find_flt, $_rx_srcdir);
 
 # wait for children
-#while (wait() != -1) {}
+while (wait() != -1) {}
 
-my $src  = shift;
-my $dst  = shift;
-my $fcmp = Acxi::Fcmp->new();
-my $rv   = $fcmp->mtime($src, $dst);
-printf("Comparing $src and $dst returns: %#.4o\n", $rv);
-if ($rv & Acxi::Fcmp::F_SRC_EXIST) {
-   if ($rv & Acxi::Fcmp::F_DST_EXIST) {
-      if (($rv & Acxi::Fcmp::F_SRC_AGE) && !($rv & Acxi::Fcmp::F_DST_AGE)) {
-         print("src exists, dst exists, src is newer, so dst will be updated\n");
-      }
-      elsif (($rv & Acxi::Fcmp::F_DST_AGE) && !($rv & Acxi::Fcmp::F_SRC_AGE)) {
-         print("src exists, dst exists, dst is newer, so nothing will be done\n");
-      }
-      elsif (($rv & Acxi::Fcmp::F_SRC_AGE) && ($rv & Acxi::Fcmp::F_DST_AGE)) {
-         print("src exists, dst exists, both are the same age, nothing to do\n");
-      }
-   }
-   else {
-      print("src exists, dst does not, so go ahead and create new file\n");
-   }
-}
-else {
-   print("src does not exist, nothing can be done\n");
-}
+#my $src  = shift;
+#my $dst  = shift;
+#my $fcmp = Acxi::Fcmp->new();
+#my $rv   = $fcmp->mtime($src, $dst);
+#printf("Comparing $src and $dst returns: %#.4o\n", $rv);
+#if ($rv & Acxi::Fcmp::F_SRC_EXIST) {
+#   if ($rv & Acxi::Fcmp::F_DST_EXIST) {
+#      if (($rv & Acxi::Fcmp::F_SRC_AGE) && !($rv & Acxi::Fcmp::F_DST_AGE)) {
+#         print("src exists, dst exists, src is newer, so dst will be updated\n");
+#      }
+#      elsif (($rv & Acxi::Fcmp::F_DST_AGE) && !($rv & Acxi::Fcmp::F_SRC_AGE)) {
+#         print("src exists, dst exists, dst is newer, so nothing will be done\n");
+#      }
+#      elsif (($rv & Acxi::Fcmp::F_SRC_AGE) && ($rv & Acxi::Fcmp::F_DST_AGE)) {
+#         print("src exists, dst exists, both are the same age, nothing to do\n");
+#      }
+#   }
+#   else {
+#      print("src exists, dst does not, so go ahead and create new file\n");
+#   }
+#}
+#else {
+#   print("src does not exist, nothing can be done\n");
+#}
 
 __END__
 
